@@ -18,7 +18,7 @@ print(missing_pct)
 
 # 3. Keep only features relevant to flight efficiency and operational delay
 keep_cols = ['airline.name', 'departure.airport', 'arrival.airport',
-           'departure.delay', 'departure.scheduled','arrival.scheduled', 'arrival.delay','departure.actual']
+            'departure.scheduled','arrival.scheduled', 'arrival.delay','departure.actual']
 df = raw_df[keep_cols].copy()
 
 # 4. Remove records missing critical identification data
@@ -28,17 +28,12 @@ df = df.drop_duplicates(subset = ['airline.name','departure.airport','arrival.ai
 # 5. Datatime conversion: Convert string timestamps to datetime objects for calculation
 time_cols = ['departure.scheduled', 'departure.actual', 'arrival.scheduled']
 for col in time_cols:
-    df[col] = pd.to_datetime(df[col])
+    df[col] = pd.to_datetime(df[col], utc=True, errors="coerce")
 
-# 6. Manually calculate departure delay to avoid API data inconsistencies
-# Result in minutes: Positive = Late, Negative = Early
-df['departure.delay'] = (df['departure.actual'] - df['departure.scheduled']).dt.total_seconds()/60
-
-# 7. Filter out unrealistic data: flights departing >1h early or >12h late
-df = df[(df['departure.delay'] > -60) & (df['departure.delay'] < 720)]
+df["day_of_week"] = df["departure.scheduled"].dt.dayofweek
+df["month"] = df["departure.scheduled"].dt.month
 
 # 8. Fill the missing data of delay
-df['departure.delay'] = df['departure.delay'].fillna(0)
 df['arrival.delay'] = df['arrival.delay'].fillna(0)
 
 # 9. Extract time-based features: Hour of departure
@@ -57,21 +52,17 @@ cat_features = ['airline.name', 'departure.airport', 'arrival.airport']
 for col in cat_features:
     df[col] = le.fit_transform(df[col].astype(str))
 
-# 13. Normalize numerical features to improve gradient descent convergence
-scaler = StandardScaler()
-num_features = ['departure.delay', 'departure_hour', 'scheduled_duration']
-df[num_features] = scaler.fit_transform(df[num_features])
-
-# 14. Final Feature Selection & Export: Select finalized features for training and export to CSV
-final_cols = cat_features + num_features + ['is_delayed']
+# 13. Final Feature Selection & Export: Select finalized features for training and export to CSV
+final_cols = cat_features + [ "day_of_week",'month', 'departure_hour', 'scheduled_duration'] + ['is_delayed']
 df_final = df[final_cols].copy()
 
-# 15. Check the processed data
+# 14. Check the processed data
 print(df_final.info)
 missing = 100*(df_final.notna().sum()/len(df_final))
 print(missing)
+print(df_final['is_delayed'].value_counts(normalize=True))
 
-# 16. Save data 
+# 15. Save data 
 output_path = r'D:/Full projet/EcoFlight_Delay_Predictor/data/process.csv'
 df_final.to_csv(output_path, index=False)       
 
